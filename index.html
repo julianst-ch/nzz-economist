@@ -2,70 +2,76 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>News Merger</title>
+    <title>News Merger - Debug Version</title>
     <style>
-        /* Minimalist styling to make source clear */
-        body { background: #000; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; }
-        .slide { display: none; width: 100%; max-width: 500px; padding: 20px; text-align: center; }
+        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        #app { width: 100%; max-width: 500px; height: 100%; position: relative; }
+        .slide { display: none; padding: 20px; text-align: center; }
         .slide.active { display: block; }
-        .source-badge { color: #1d9bf0; font-weight: bold; margin-bottom: 10px; }
+        #error-overlay { color: #ff5f5f; padding: 20px; border: 1px solid #ff5f5f; }
+        .source-badge { color: #1d9bf0; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="slidesArea"></div>
+    <div id="app">
+        <div id="status">Lade Daten...</div>
+        <div id="slidesArea"></div>
+    </div>
 
     <script>
+        const USE_MOCK_DATA = false; // Set to TRUE if you just want to see the UI working
+
         const FEEDS = [
             { url: 'https://www.nzz.ch/recent.rss', name: 'NZZ' },
             { url: 'https://www.economist.com/sections/main/rss.xml', name: 'Economist' }
         ];
 
-        let stories = [];
-
         async function fetchRSS(feed) {
+            if (USE_MOCK_DATA) return [{ title: "Test Headline from " + feed.name, source: feed.name }];
+            
             try {
-                // Using a reliable proxy
                 const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feed.url)}`);
+                if (!res.ok) throw new Error("Proxy error");
                 const data = await res.json();
                 const xml = new DOMParser().parseFromString(data.contents, "text/xml");
                 const items = xml.querySelectorAll("item");
-                
-                const parsed = Array.from(items).map(item => ({
-                    title: item.querySelector('title')?.textContent,
+                return Array.from(items).map(item => ({
+                    title: item.querySelector('title')?.textContent || "No Title",
                     source: feed.name
                 }));
-                
-                console.log(`Successfully loaded ${parsed.length} items from ${feed.name}`);
-                return parsed;
-            } catch(e) { 
-                console.error(`Error loading ${feed.name}:`, e); 
-                return []; 
+            } catch(e) {
+                console.error(e);
+                throw new Error(`Failed to load ${feed.name}: ${e.message}`);
             }
         }
 
         async function init() {
-            const results = await Promise.all(FEEDS.map(fetchRSS));
-            
-            // COMBINATION LOGIC
-            // We take items from both lists and push them into the 'stories' array
-            // This loop ensures they are mixed: [NZZ, Econ, NZZ, Econ...]
-            for(let i=0; i<Math.max(results[0].length, results[1].length); i++) {
-                if(results[0][i]) stories.push(results[0][i]);
-                if(results[1][i]) stories.push(results[1][i]);
-            }
-            
-            console.log("Total combined stories:", stories.length);
-            console.log("Stories array structure:", stories);
+            const status = document.getElementById('status');
+            try {
+                const results = await Promise.all(FEEDS.map(fetchRSS));
+                let stories = [];
+                // Interleave
+                const len = Math.max(results[0].length, results[1].length);
+                for(let i=0; i<len; i++) {
+                    if(results[0][i]) stories.push(results[0][i]);
+                    if(results[1][i]) stories.push(results[1][i]);
+                }
 
-            const area = document.getElementById('slidesArea');
-            stories.forEach((s, i) => {
-                area.innerHTML += `
-                    <div class="slide ${i === 0 ? 'active' : ''}">
-                        <div class="source-badge">${s.source}</div>
-                        <h1>${s.title}</h1>
-                    </div>`;
-            });
+                if (stories.length === 0) throw new Error("No stories found.");
+
+                status.style.display = 'none';
+                const area = document.getElementById('slidesArea');
+                stories.forEach((s, i) => {
+                    area.innerHTML += `
+                        <div class="slide ${i === 0 ? 'active' : ''}">
+                            <div class="source-badge">${s.source}</div>
+                            <h1>${s.title}</h1>
+                        </div>`;
+                });
+            } catch(err) {
+                status.innerHTML = `<div id="error-overlay"><h1>Fehler</h1><p>${err.message}</p><p>Probieren Sie, USE_MOCK_DATA auf true zu setzen.</p></div>`;
+            }
         }
 
         init();
