@@ -1,1 +1,192 @@
-1
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Combined News Feed: NZZ & The Economist</title>
+  <style>
+    :root {
+      --nzz-bg: #ffffff;
+      --nzz-text: #1a1a1a;
+      --nzz-muted: #666666;
+      --nzz-border: #e5e5e5;
+      
+      --economist-red: #e3120b;
+      --economist-text: #111111;
+      --economist-muted: #555555;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f9f9f9;
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .feed-container {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Common Card Styling */
+    .news-card {
+      background: #ffffff;
+      border: 1px solid var(--nzz-border);
+      padding: 24px;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+      transition: transform 0.2s ease;
+    }
+    
+    .news-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .source-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      display: inline-block;
+    }
+
+    .news-title {
+      font-family: "Georgia", serif;
+      font-size: 1.4rem;
+      line-height: 1.3;
+      margin: 0 0 10px 0;
+    }
+    
+    .news-title a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .news-snippet {
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .news-meta {
+      font-size: 0.8rem;
+      color: var(--nzz-muted);
+    }
+
+    /* --- NZZ Specific Styles --- */
+    .news-card.nzz {
+      border-left: 4px solid var(--nzz-text);
+    }
+    .news-card.nzz .source-badge {
+      color: var(--nzz-text);
+    }
+    .news-card.nzz .news-snippet {
+      color: var(--nzz-muted);
+    }
+
+    /* --- Economist Specific Styles --- */
+    .news-card.economist {
+      border: 1px solid var(--economist-red);
+      border-left: 4px solid var(--economist-red);
+    }
+    .news-card.economist .source-badge {
+      background-color: var(--economist-red);
+      color: #ffffff;
+      padding: 2px 6px;
+      border-radius: 2px;
+    }
+    .news-card.economist .news-title a {
+      color: var(--economist-text);
+    }
+    .news-card.economist .news-title a:hover {
+      color: var(--economist-red);
+    }
+    .news-card.economist .news-snippet {
+      color: var(--economist-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="feed-container" id="news-feed">
+    <!-- Items will be injected dynamically here -->
+    <p style="text-align:center; color:#666;">Loading unified feed...</p>
+  </div>
+
+  <script>
+    // Feed URLs (Using rss2json API to avoid CORS blocking on client side)
+    const nzzFeedUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.nzz.ch/recent.rss')}`;
+    const economistFeedUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.economist.com/sections/main/rss.xml')}`;
+
+    async function fetchAndCombineFeeds() {
+      try {
+        const [nzzRes, ecoRes] = await Promise.all([
+          fetch(nzzFeedUrl).then(res => res.json()),
+          fetch(economistFeedUrl).then(res => res.json())
+        ]);
+
+        const nzzItems = nzzRes.items || [];
+        const ecoItems = ecoRes.items || [];
+
+        // Interleave the feeds (every other news item)
+        const combinedItems = [];
+        const maxLen = Math.max(nzzItems.length, ecoItems.length);
+
+        for (let i = 0; i < maxLen; i++) {
+          if (i < nzzItems.length) {
+            combinedItems.push({ ...nzzItems[i], origin: 'NZZ' });
+          }
+          if (i < ecoItems.length) {
+            combinedItems.push({ ...ecoItems[i], origin: 'Economist' });
+          }
+        }
+
+        renderFeed(combinedItems);
+      } catch (error) {
+        console.error("Error loading feeds:", error);
+        document.getElementById('news-feed').innerHTML = '<p style="text-align:center; color:red;">Failed to load news feeds.</p>';
+      }
+    }
+
+    function renderFeed(items) {
+      const feedContainer = document.getElementById('news-feed');
+      feedContainer.innerHTML = ''; // Clear loading indicator
+
+      items.forEach(item => {
+        const isNZZ = item.origin === 'NZZ';
+        const cardClass = isNZZ ? 'nzz' : 'economist';
+        const label = isNZZ ? 'NZZ' : 'Economist';
+        
+        // Format date beautifully
+        const pubDate = new Date(item.pubDate).toLocaleDateString(undefined, {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        // Clean descriptions from residual HTML tags if present
+        const cleanSnippet = item.description.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 180) + '...';
+
+        const cardHtml = `
+          <div class="news-card ${cardClass}">
+            <div class="source-badge">${label}</div>
+            <h2 class="news-title">
+              <a href="${item.link}" target="_blank" rel="noopener">${item.title}</a>
+            </h2>
+            <div class="news-snippet">${cleanSnippet}</div>
+            <div class="news-meta">${pubDate}</div>
+          </div>
+        `;
+        feedContainer.innerHTML += cardHtml;
+      });
+    }
+
+    // Initialize
+    fetchAndCombineFeeds();
+  </script>
+</body>
+</html>
+
