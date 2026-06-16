@@ -2,86 +2,530 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>News Stories</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NZZ News Stories - Samsung Signage Optimized</title>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; margin: 0; overflow: hidden; }
-        .container { width: 100vw; height: 100vh; position: relative; }
-        .slide { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; padding: 40px; box-sizing: border-box; text-align: center; }
-        .slide.active { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .source-badge { color: #1d9bf0; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
-        h1 { font-size: 2rem; }
-        #status { position: absolute; top: 50%; width: 100%; text-align: center; }
+        :root {
+            --bg-color: #050b14; /* Exakter, tiefer Blauton aus deinem Screenshot */
+            --text-color: #ffffff;
+            --text-muted: #a2aebf;
+            --accent-blue: #2e96ff;
+            --story-duration: 7000ms;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: #000;
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Perfekte 9:16 Box - Maximale Kompatibilität für Tizen OS */
+        .story-wrapper {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: calc(100vh * 9 / 16);
+            max-height: calc(100vw * 16 / 9);
+            aspect-ratio: 9 / 16;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0,0,0,0.85);
+        }
+
+        /* Fortschrittsbalken oben */
+        .progress-container {
+            position: absolute;
+            top: 2.5vh;
+            left: 0;
+            right: 0;
+            display: flex;
+            padding: 0 4%;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .progress-bar {
+            height: 4px;
+            flex: 1;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #fff;
+        }
+
+        /* Header (Kategorie & Zeit) */
+        .story-header {
+            position: absolute;
+            top: 4.5vh;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 5%;
+            z-index: 10;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+        }
+
+        .meta-info {
+            display: flex;
+            align-items: center;
+            font-size: 2.2vh; /* Skaliert perfekt auf dem 13'' Monitor */
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .category {
+            color: #fff;
+        }
+
+        .time-ago {
+            color: var(--text-muted);
+            margin-left: 8px;
+            font-weight: 400;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 3.5vh;
+            cursor: pointer;
+            opacity: 0.6;
+            line-height: 1;
+        }
+
+        /* Touch-/Klick-Zonen */
+        .nav-zones {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            display: flex;
+        }
+
+        .zone-left { width: 33%; height: 100%; }
+        .zone-right { width: 67%; height: 100%; }
+
+        .slides-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Bild-Bereich: Exakt 50% Höhe wie im gewünschten Layout */
+        .image-container {
+            width: 100%;
+            height: 50%;
+            position: relative;
+            background-color: #000;
+        }
+
+        .story-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Sanfter Verlauf in den Textbereich */
+        .image-container::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 12vh;
+            background: linear-gradient(to bottom, transparent, var(--bg-color));
+        }
+
+        /* Text-Bereich mit exakten Abständen */
+        .content-container {
+            flex: 1;
+            padding: 3vh 6% 6vh 6%; 
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            background-color: var(--bg-color);
+        }
+
+        .ticker-badge {
+            align-self: flex-start;
+            font-size: 1.6vh;
+            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            color: var(--accent-blue);
+            margin-bottom: 1.5vh;
+        }
+
+        /* WUCHTIGER TITEL (Exakt wie im Screenshot angepasst) */
+        .story-title {
+            font-family: Georgia, serif;
+            font-size: 4.2vh; /* Große, kräftige Typografie für 1080p */
+            line-height: 1.25;
+            font-weight: 700;
+            margin-bottom: 2.5vh;
+            color: var(--text-color);
+            letter-spacing: -0.3px;
+        }
+
+        /* GROSSER, LESBARER UNTERTITEL */
+        .story-description {
+            font-size: 2.3vh; /* Perfekt lesbar auf dem 13 Zoll Screen */
+            line-height: 1.55;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .story-author {
+            font-size: 1.8vh;
+            color: var(--text-muted);
+            margin-top: auto;
+            padding-top: 2vh;
+            opacity: 0.7;
+        }
+
+        /* Integrierter Live-Status-Logger im Loader */
+        .loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.5vh;
+            color: #fff;
+            z-index: 20;
+            text-align: center;
+            width: 80%;
+        }
+
+        #status-ticker {
+            margin-top: 15px;
+            font-size: 1.6vh;
+            color: var(--text-muted);
+            font-family: monospace;
+            display: block;
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div id="status">Lade Nachrichten...</div>
-        <div id="slidesArea"></div>
+    <!-- Debug-Konsole bei kritischen Scriptfehlern -->
+    <div id="error-debug" style="position: absolute; top: 0; left: 0; right: 0; background: rgba(220, 20, 60, 0.95); color: white; padding: 15px; z-index: 99999; font-family: monospace; font-size: 14px; display: none; word-break: break-all; text-align: left;"></div>
+
+    <div class="story-wrapper">
+        <!-- Loader mit System-Statusanzeige -->
+        <div class="loader" id="loader">
+            NZZ Stories werden geladen...
+            <span id="status-ticker">Initialisiere Verbindung...</span>
+        </div>
+        
+        <div class="progress-container" id="progressContainer"></div>
+        <div class="story-header" id="storyHeader" style="display: none;">
+            <div class="meta-info">
+                <span class="category" id="headerCategory">NZZ</span>
+                <span class="time-ago" id="headerTime">Jetzt</span>
+            </div>
+            <button class="close-btn">&times;</button>
+        </div>
+
+        <div class="nav-zones">
+            <div class="zone-left" id="zoneLeft"></div>
+            <div class="zone-right" id="zoneRight"></div>
+        </div>
+
+        <div class="slides-container" id="slidesContainer"></div>
     </div>
 
     <script>
-        const FEEDS = [
-            { url: 'https://www.nzz.ch/recent.rss', name: 'NZZ' },
-            { url: 'https://www.economist.com/sections/main/rss.xml', name: 'Economist' }
-        ];
+        // Fängt Fehler ab und wirft sie sofort visuell auf das Display
+        window.onerror = function(msg, url, line) {
+            const errorDiv = document.getElementById('error-debug');
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.innerText = "System-Fehler: " + msg + "\nZeile: " + line;
+            }
+            return false;
+        };
 
-        async function fetchRSS(feed) {
+        const RSS_URL = 'https://www.nzz.ch/recent.rss';
+        const STORY_DURATION = 7000;
+
+        let stories = [];
+        let currentIndex = 0;
+        let startTime = null;
+        let animationFrameId = null;
+
+        function logStatus(text) {
+            const ticker = document.getElementById('status-ticker');
+            if (ticker) ticker.innerText = text;
+        }
+
+        async function fetchFeed() {
+            // PROXY 1: Corsproxy.io
             try {
-                // RSS2JSON API acts as a reliable proxy
-                const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`;
-                const response = await fetch(apiUrl);
-                const data = await response.json();
-                
-                if (data.status !== 'ok') throw new Error("API Fehler");
-                
-                return data.items.map(item => ({
-                    title: item.title,
-                    source: feed.name
-                }));
+                logStatus("Versuche Verbindung über Server 1...");
+                const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`);
+                if (!response.ok) throw new Error("Server 1 verweigert");
+                const xmlText = await response.text();
+                parseAndInit(xmlText);
+                return;
             } catch (e) {
-                console.error(`Error with ${feed.name}:`, e);
-                return [];
+                console.warn("Proxy 1 fehlgeschlagen, wechsle auf Backup...", e);
+            }
+
+            // PROXY 2: Codetabs (Sehr stabil für Signage)
+            try {
+                logStatus("Server 1 überlastet. Wechsel auf Server 2...");
+                const response = await fetch(`https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(RSS_URL)}`);
+                if (!response.ok) throw new Error("Server 2 verweigert");
+                const xmlText = await response.text();
+                parseAndInit(xmlText);
+                return;
+            } catch (e) {
+                console.warn("Proxy 2 fehlgeschlagen, wechsle auf Letztinstanz...", e);
+            }
+
+            // PROXY 3: Allorigins
+            try {
+                logStatus("Server 2 überlastet. Letzter Versuch über Server 3...");
+                const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(RSS_URL)}`);
+                if (!response.ok) throw new Error("Server 3 verweigert");
+                const data = await response.json();
+                if (!data.contents) throw new Error("Inhalt leer");
+                parseAndInit(data.contents);
+                return;
+            } catch (e) {
+                logStatus("Fehler: Alle Verbindungsserver blockiert. Bitte Seite neu laden.");
+                document.getElementById('loader').style.color = "#ff4a4a";
             }
         }
 
-        async function init() {
-            const results = await Promise.all(FEEDS.map(fetchRSS));
-            let stories = [];
-            
-            // Combine them
-            const maxLength = Math.max(results[0].length, results[1].length);
-            for(let i = 0; i < maxLength; i++) {
-                if(results[0][i]) stories.push(results[0][i]);
-                if(results[1][i]) stories.push(results[1][i]);
-            }
+        function parseAndInit(xmlString) {
+            logStatus("Daten empfangen. Verarbeite Feed...");
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+                const items = xmlDoc.querySelectorAll("item");
+                
+                stories = Array.from(items).slice(0, 15).map(item => {
+                    const title = item.querySelector('title') ? item.querySelector('title').textContent : '';
+                    const rawDescription = item.querySelector('description') ? item.querySelector('description').textContent : '';
+                    const pubDate = item.querySelector('pubDate') ? item.querySelector('pubDate').textContent : '';
+                    const category = item.querySelector('category') ? item.querySelector('category').textContent : 'International';
 
-            if(stories.length === 0) {
-                document.getElementById('status').innerText = "Keine Daten geladen. Überprüfe API-Limit.";
-                return;
-            }
+                    let imageUrl = '';
+                    let creator = '';
+                    
+                    const allNodes = item.getElementsByTagName('*');
+                    for (let n = 0; n < allNodes.length; n++) {
+                        const node = allNodes[n];
+                        const localName = (node.localName || node.nodeName.split(':').pop()).toLowerCase();
+                        
+                        if (localName === 'content' || localName === 'enclosure' || localName === 'thumbnail') {
+                            const url = node.getAttribute('url') || node.getAttribute('href');
+                            if (url && url.startsWith('http')) imageUrl = url;
+                        }
+                        if (localName === 'creator') {
+                            creator = node.textContent || '';
+                        }
+                    }
 
-            document.getElementById('status').style.display = 'none';
-            const area = document.getElementById('slidesArea');
-            
-            stories.forEach((s, i) => {
-                area.innerHTML += `
-                    <div class="slide ${i === 0 ? 'active' : ''}">
-                        <div class="source-badge">${s.source}</div>
-                        <h1>${s.title}</h1>
-                    </div>`;
+                    if (!imageUrl && rawDescription) {
+                        const imgMatch = rawDescription.match(/<img[^>]+src="([^">]+)"/i);
+                        if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
+                    }
+
+                    // Ausfallsichere High-Res Bild-Zuweisung für NZZ Server
+                    if (imageUrl && imageUrl.includes('nzz.ch')) {
+                        const baseUrl = imageUrl.split('?')[0];
+                        imageUrl = baseUrl + "?width=1440&fit=bounds&quality=85&auto=webp";
+                    } else if (!imageUrl) {
+                        imageUrl = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200';
+                    }
+
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = rawDescription;
+                    const embeddedImg = tempDiv.querySelector('img');
+                    if (embeddedImg) embeddedImg.remove();
+                    const cleanDescription = tempDiv.textContent || tempDiv.innerText || '';
+
+                    return { 
+                        title: title, 
+                        description: cleanDescription.trim(), 
+                        imageUrl: imageUrl, 
+                        pubDate: pubDate, 
+                        category: category, 
+                        creator: creator 
+                    };
+                });
+
+                if (stories.length === 0) {
+                    logStatus("Keine aktuellen Nachrichten im Feed vorhanden.");
+                    return;
+                }
+                
+                initStories();
+            } catch (err) {
+                logStatus("Fehler beim Verarbeiten der Daten: " + err.message);
+            }
+        }
+
+        function initStories() {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('storyHeader').style.display = 'flex';
+
+            const progressContainer = document.getElementById('progressContainer');
+            const slidesContainer = document.getElementById('slidesContainer');
+
+            progressContainer.innerHTML = '';
+            slidesContainer.innerHTML = '';
+
+            stories.forEach((story, idx) => {
+                const bar = document.createElement('div');
+                bar.className = 'progress-bar';
+                bar.innerHTML = '<div class="progress-fill" id="fill-' + idx + '"></div>';
+                progressContainer.appendChild(bar);
+
+                const slide = document.createElement('div');
+                slide.className = 'slide ' + (idx === 0 ? 'active' : '');
+                slide.innerHTML = `
+                    <div class="image-container">
+                        <img class="story-img" src="${story.imageUrl}" alt="News">
+                    </div>
+                    <div class="content-container">
+                        ${story.title.toLowerCase().includes('live') || story.title.toLowerCase().includes('ticker') ? '<div class="ticker-badge">LIVE-TICKER</div>' : ''}
+                        <h1 class="story-title">${story.title}</h1>
+                        <p class="story-description">${story.description}</p>
+                        ${story.creator ? `<p class="story-author">${story.creator}</p>` : ''}
+                    </div>
+                `;
+                slidesContainer.appendChild(slide);
             });
 
-            // Basic slideshow logic
-            let current = 0;
-            setInterval(() => {
-                document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
-                current = (current + 1) % stories.length;
-                document.querySelectorAll('.slide')[current].classList.add('active');
-            }, 5000);
+            showStory(0);
         }
 
-        init();
+        function showStory(index) {
+            if (index < 0 || index >= stories.length) return;
+            
+            cancelAnimationFrame(animationFrameId);
+
+            const slides = document.querySelectorAll('.slide');
+            slides.forEach((slide, idx) => {
+                slide.classList.toggle('active', idx === index);
+            });
+
+            currentIndex = index;
+            const story = stories[currentIndex];
+
+            document.getElementById('headerCategory').innerText = story.category;
+            document.getElementById('headerTime').innerText = formatRelativeTime(story.pubDate);
+            
+            const bars = document.querySelectorAll('.progress-bar');
+            bars.forEach((bar, idx) => {
+                const fill = bar.querySelector('.progress-fill');
+                if (idx < index) {
+                    fill.style.width = '100%';
+                } else if (idx > index) {
+                    fill.style.width = '0%';
+                }
+            });
+
+            startTime = performance.now();
+            animateProgress();
+        }
+
+        function animateProgress() {
+            const activeFill = document.getElementById('fill-' + currentIndex);
+            if (!activeFill) return;
+
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min((elapsed / STORY_DURATION) * 100, 100);
+            activeFill.style.width = progress + '%';
+
+            if (progress < 100) {
+                animationFrameId = requestAnimationFrame(animateProgress);
+            } else {
+                nextStory();
+            }
+        }
+
+        function nextStory() {
+            if (currentIndex < stories.length - 1) {
+                showStory(currentIndex + 1);
+            } else {
+                showStory(0);
+            }
+        }
+
+        function prevStory() {
+            if (currentIndex > 0) {
+                showStory(currentIndex - 1);
+            } else {
+                showStory(0);
+            }
+        }
+
+        function formatRelativeTime(dateStr) {
+            try {
+                const parsedDate = new Date(dateStr);
+                const diffMs = new Date() - parsedDate;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMins / 60);
+
+                if (diffMins < 60) return Math.max(1, diffMins) + 'm';
+                if (diffHours < 24) return diffHours + 'h';
+                return parsedDate.toLocaleDateString('de-CH', { day: 'numeric', month: 'short' });
+            } catch (e) {
+                return 'Jetzt';
+            }
+        }
+
+        document.getElementById('zoneLeft').addEventListener('click', prevStory);
+        document.getElementById('zoneRight').addEventListener('click', nextStory);
+
+        fetchFeed();
     </script>
 </body>
 </html>
