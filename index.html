@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NZZ News Stories - Samsung Signage Optimized</title>
+    <title>NZZ News Stories - Universal Playout</title>
     <style>
         :root {
-            --bg-color: #050b14; /* Exakter, tiefer Blauton aus deinem Screenshot */
+            --bg-color: #050b14; /* Originaler, tiefer NZZ-Blauton */
             --text-color: #ffffff;
             --text-muted: #a2aebf;
             --accent-blue: #2e96ff;
@@ -32,7 +32,7 @@
             overflow: hidden;
         }
 
-        /* Perfekte 9:16 Box - Maximale Kompatibilität für Tizen OS */
+        /* Perfekte 9:16 Box für ALLE Geräte */
         .story-wrapper {
             position: relative;
             width: 100vw;
@@ -91,7 +91,7 @@
         .meta-info {
             display: flex;
             align-items: center;
-            font-size: 2.2vh; /* Skaliert perfekt auf dem 13'' Monitor */
+            font-size: 2.2vh;
             font-weight: 700;
             letter-spacing: 0.3px;
         }
@@ -116,7 +116,7 @@
             line-height: 1;
         }
 
-        /* Touch-/Klick-Zonen */
+        /* Touch-/Klick-Zonen für manuelle Navigation */
         .nav-zones {
             position: absolute;
             top: 0;
@@ -154,7 +154,7 @@
             visibility: visible;
         }
 
-        /* Bild-Bereich: Exakt 50% Höhe wie im gewünschten Layout */
+        /* Bild-Bereich */
         .image-container {
             width: 100%;
             height: 50%;
@@ -168,7 +168,6 @@
             object-fit: cover;
         }
 
-        /* Sanfter Verlauf in den Textbereich */
         .image-container::after {
             content: '';
             position: absolute;
@@ -179,7 +178,7 @@
             background: linear-gradient(to bottom, transparent, var(--bg-color));
         }
 
-        /* Text-Bereich mit exakten Abständen */
+        /* Text-Bereich */
         .content-container {
             flex: 1;
             padding: 3vh 6% 6vh 6%; 
@@ -199,10 +198,9 @@
             margin-bottom: 1.5vh;
         }
 
-        /* WUCHTIGER TITEL (Exakt wie im Screenshot angepasst) */
         .story-title {
             font-family: Georgia, serif;
-            font-size: 4.2vh; /* Große, kräftige Typografie für 1080p */
+            font-size: 4.2vh; 
             line-height: 1.25;
             font-weight: 700;
             margin-bottom: 2.5vh;
@@ -210,9 +208,8 @@
             letter-spacing: -0.3px;
         }
 
-        /* GROSSER, LESBARER UNTERTITEL */
         .story-description {
-            font-size: 2.3vh; /* Perfekt lesbar auf dem 13 Zoll Screen */
+            font-size: 2.3vh; 
             line-height: 1.55;
             color: var(--text-muted);
             font-weight: 400;
@@ -226,7 +223,7 @@
             opacity: 0.7;
         }
 
-        /* Integrierter Live-Status-Logger im Loader */
+        /* Loader-Screen */
         .loader {
             position: absolute;
             top: 50%;
@@ -241,7 +238,7 @@
 
         #status-ticker {
             margin-top: 15px;
-            font-size: 1.6vh;
+            font-size: 1.7vh;
             color: var(--text-muted);
             font-family: monospace;
             display: block;
@@ -250,14 +247,12 @@
 </head>
 <body>
 
-    <!-- Debug-Konsole bei kritischen Scriptfehlern -->
     <div id="error-debug" style="position: absolute; top: 0; left: 0; right: 0; background: rgba(220, 20, 60, 0.95); color: white; padding: 15px; z-index: 99999; font-family: monospace; font-size: 14px; display: none; word-break: break-all; text-align: left;"></div>
 
     <div class="story-wrapper">
-        <!-- Loader mit System-Statusanzeige -->
         <div class="loader" id="loader">
             NZZ Stories werden geladen...
-            <span id="status-ticker">Initialisiere Verbindung...</span>
+            <span id="status-ticker">Verbindung wird aufgebaut...</span>
         </div>
         
         <div class="progress-container" id="progressContainer"></div>
@@ -278,7 +273,6 @@
     </div>
 
     <script>
-        // Fängt Fehler ab und wirft sie sofort visuell auf das Display
         window.onerror = function(msg, url, line) {
             const errorDiv = document.getElementById('error-debug');
             if (errorDiv) {
@@ -302,57 +296,96 @@
         }
 
         async function fetchFeed() {
-            // PROXY 1: Corsproxy.io
-            try {
-                logStatus("Versuche Verbindung über Server 1...");
-                const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`);
-                if (!response.ok) throw new Error("Server 1 verweigert");
-                const xmlText = await response.text();
-                parseAndInit(xmlText);
-                return;
-            } catch (e) {
-                console.warn("Proxy 1 fehlgeschlagen, wechsle auf Backup...", e);
-            }
+            // Ansicht zurücksetzen bei neuem Ladeversuch
+            cancelAnimationFrame(animationFrameId);
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('storyHeader').style.display = 'none';
+            document.getElementById('slidesContainer').innerHTML = '';
+            document.getElementById('progressContainer').innerHTML = '';
+            stories = [];
 
-            // PROXY 2: Codetabs (Sehr stabil für Signage)
+            // Server-Versuch 1: Allorigins
             try {
-                logStatus("Server 1 überlastet. Wechsel auf Server 2...");
-                const response = await fetch(`https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(RSS_URL)}`);
-                if (!response.ok) throw new Error("Server 2 verweigert");
-                const xmlText = await response.text();
-                parseAndInit(xmlText);
-                return;
-            } catch (e) {
-                console.warn("Proxy 2 fehlgeschlagen, wechsle auf Letztinstanz...", e);
-            }
-
-            // PROXY 3: Allorigins
-            try {
-                logStatus("Server 2 überlastet. Letzter Versuch über Server 3...");
+                logStatus("Verbinde mit Server 1...");
                 const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(RSS_URL)}`);
-                if (!response.ok) throw new Error("Server 3 verweigert");
+                if (!response.ok) throw new Error();
                 const data = await response.json();
-                if (!data.contents) throw new Error("Inhalt leer");
-                parseAndInit(data.contents);
-                return;
+                if (data.contents) {
+                    parseAndInit(data.contents);
+                    return;
+                }
             } catch (e) {
-                logStatus("Fehler: Alle Verbindungsserver blockiert. Bitte Seite neu laden.");
-                document.getElementById('loader').style.color = "#ff4a4a";
+                console.warn("Server 1 fehlgeschlagen.");
             }
+
+            // Server-Versuch 2: Codetabs
+            try {
+                logStatus("Wechsle auf Backup-Server 2...");
+                const response = await fetch(`https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(RSS_URL)}`);
+                if (!response.ok) throw new Error();
+                const xmlText = await response.text();
+                if (xmlText && xmlText.includes('<rss')) {
+                    parseAndInit(xmlText);
+                    return;
+                }
+            } catch (e) {
+                console.warn("Server 2 fehlgeschlagen.");
+            }
+
+            // Server-Versuch 3: Corsproxy
+            try {
+                logStatus("Wechsle auf Backup-Server 3...");
+                const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(RSS_URL)}`);
+                if (!response.ok) throw new Error();
+                const xmlText = await response.text();
+                if (xmlText) {
+                    parseAndInit(xmlText);
+                    return;
+                }
+            } catch (e) {
+                console.warn("Server 3 fehlgeschlagen.");
+            }
+
+            // Fallback-Schleife: Wenn alles fehlschlägt, probieren wir es in 10s erneut (Keine Fake-Story-Initialisierung mehr)
+            logStatus("Verbindung temporär blockiert. Automatischer Reconnect in 10s...");
+            setTimeout(fetchFeed, 10000);
         }
 
         function parseAndInit(xmlString) {
-            logStatus("Daten empfangen. Verarbeite Feed...");
             try {
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlString, "text/xml");
                 const items = xmlDoc.querySelectorAll("item");
                 
-                stories = Array.from(items).slice(0, 15).map(item => {
+                const parsedStories = Array.from(items).slice(0, 15).map(item => {
                     const title = item.querySelector('title') ? item.querySelector('title').textContent : '';
                     const rawDescription = item.querySelector('description') ? item.querySelector('description').textContent : '';
                     const pubDate = item.querySelector('pubDate') ? item.querySelector('pubDate').textContent : '';
-                    const category = item.querySelector('category') ? item.querySelector('category').textContent : 'International';
+                    const link = item.querySelector('link') ? item.querySelector('link').textContent.trim() : '';
+
+                    // 1. Präzise Kategorie-Extrahierung direkt aus dem NZZ-Link-Pfad
+                    let category = '';
+                    if (link && link.includes('nzz.ch')) {
+                        try {
+                            const urlObj = new URL(link);
+                            const pathSegments = urlObj.pathname.split('/').filter(s => s);
+                            if (pathSegments.length > 0 && !pathSegments[0].includes('ld.')) {
+                                category = pathSegments[0];
+                                // Ersten Buchstaben groß schreiben (z.B. wirtschaft -> Wirtschaft)
+                                category = category.charAt(0).toUpperCase() + category.slice(1);
+                            }
+                        } catch (e) {}
+                    }
+
+                    // Fallback auf das offizielle Tag, falls die URL-Struktur unerwartet ist
+                    if (!category) {
+                        category = item.querySelector('category') ? item.querySelector('category').textContent : 'NZZ';
+                    }
+
+                    // Bereinigung von generischen Tags
+                    if (category.toLowerCase() === 'recent' || category.toLowerCase() === 'news') {
+                        category = 'NZZ';
+                    }
 
                     let imageUrl = '';
                     let creator = '';
@@ -376,7 +409,6 @@
                         if (imgMatch && imgMatch[1]) imageUrl = imgMatch[1];
                     }
 
-                    // Ausfallsichere High-Res Bild-Zuweisung für NZZ Server
                     if (imageUrl && imageUrl.includes('nzz.ch')) {
                         const baseUrl = imageUrl.split('?')[0];
                         imageUrl = baseUrl + "?width=1440&fit=bounds&quality=85&auto=webp";
@@ -400,18 +432,21 @@
                     };
                 });
 
-                if (stories.length === 0) {
-                    logStatus("Keine aktuellen Nachrichten im Feed vorhanden.");
-                    return;
+                if (parsedStories.length === 0) {
+                    logStatus("Keine Artikel im Feed gefunden. Versuche erneut in 10s...");
+                    setTimeout(fetchFeed, 10000);
+                } else {
+                    initStories(parsedStories);
                 }
-                
-                initStories();
             } catch (err) {
-                logStatus("Fehler beim Verarbeiten der Daten: " + err.message);
+                console.error(err);
+                logStatus("Fehler beim Verarbeiten. Versuche erneut in 10s...");
+                setTimeout(fetchFeed, 10000);
             }
         }
 
-        function initStories() {
+        function initStories(dataArray) {
+            stories = dataArray;
             document.getElementById('loader').style.display = 'none';
             document.getElementById('storyHeader').style.display = 'flex';
 
