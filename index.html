@@ -284,6 +284,7 @@
 
         const RSS_URL = 'https://www.nzz.ch/recent.rss';
         const STORY_DURATION = 7000;
+        const CACHE_KEY = 'nzz_stories_playout_cache';
 
         let stories = [];
         let currentIndex = 0;
@@ -296,14 +297,6 @@
         }
 
         async function fetchFeed() {
-            // Ansicht zurücksetzen bei neuem Ladeversuch
-            cancelAnimationFrame(animationFrameId);
-            document.getElementById('loader').style.display = 'block';
-            document.getElementById('storyHeader').style.display = 'none';
-            document.getElementById('slidesContainer').innerHTML = '';
-            document.getElementById('progressContainer').innerHTML = '';
-            stories = [];
-
             // Server-Versuch 1: Allorigins
             try {
                 logStatus("Verbinde mit Server 1...");
@@ -346,9 +339,23 @@
                 console.warn("Server 3 fehlgeschlagen.");
             }
 
-            // Fallback-Schleife: Wenn alles fehlschlägt, probieren wir es in 10s erneut (Keine Fake-Story-Initialisierung mehr)
-            logStatus("Verbindung temporär blockiert. Automatischer Reconnect in 10s...");
-            setTimeout(fetchFeed, 10000);
+            // AUSFALLSICHERUNG: Wenn alle Proxies blockieren, prüfen wir den lokalen Cache
+            const cachedData = localStorage.getItem(CACHE_KEY);
+            if (cachedData) {
+                console.log("Server blockiert. Verwende lokalen Nachrichtencache.");
+                const parsedStories = JSON.parse(cachedData);
+                
+                // Falls das Display noch gar keine Stories geladen hatte, initialisieren wir jetzt die gecachten Daten
+                if (stories.length === 0) {
+                    initStories(parsedStories);
+                }
+                // Im Hintergrund leise in 30 Sekunden erneut versuchen, ohne den Playout zu stören
+                setTimeout(fetchFeed, 30000);
+            } else {
+                // Nur wenn absolut gar keine Daten da sind (beim allerersten App-Start), zeigen wir die Warteschleife
+                logStatus("Verbindung temporär blockiert. Automatischer Reconnect in 10s...");
+                setTimeout(fetchFeed, 10000);
+            }
         }
 
         function parseAndInit(xmlString) {
@@ -363,7 +370,7 @@
                     const pubDate = item.querySelector('pubDate') ? item.querySelector('pubDate').textContent : '';
                     const link = item.querySelector('link') ? item.querySelector('link').textContent.trim() : '';
 
-                    // 1. Präzise Kategorie-Extrahierung direkt aus dem NZZ-Link-Pfad
+                    // Präzise Kategorie-Extrahierung direkt aus dem NZZ-Link-Pfad
                     let category = '';
                     if (link && link.includes('nzz.ch')) {
                         try {
@@ -371,18 +378,15 @@
                             const pathSegments = urlObj.pathname.split('/').filter(s => s);
                             if (pathSegments.length > 0 && !pathSegments[0].includes('ld.')) {
                                 category = pathSegments[0];
-                                // Ersten Buchstaben groß schreiben (z.B. wirtschaft -> Wirtschaft)
                                 category = category.charAt(0).toUpperCase() + category.slice(1);
                             }
                         } catch (e) {}
                     }
 
-                    // Fallback auf das offizielle Tag, falls die URL-Struktur unerwartet ist
                     if (!category) {
                         category = item.querySelector('category') ? item.querySelector('category').textContent : 'NZZ';
                     }
 
-                    // Bereinigung von generischen Tags
                     if (category.toLowerCase() === 'recent' || category.toLowerCase() === 'news') {
                         category = 'NZZ';
                     }
@@ -433,19 +437,30 @@
                 });
 
                 if (parsedStories.length === 0) {
-                    logStatus("Keine Artikel im Feed gefunden. Versuche erneut in 10s...");
-                    setTimeout(fetchFeed, 10000);
-                } else {
-                    initStories(parsedStories);
+                    throw new Error("Leerer Feed");
                 }
+
+                // Erfolgreiche Daten im localStorage für Offline-Phasen ablegen
+                localStorage.setItem(CACHE_KEY, JSON.stringify(parsedStories));
+                
+                initStories(parsedStories);
             } catch (err) {
                 console.error(err);
-                logStatus("Fehler beim Verarbeiten. Versuche erneut in 10s...");
-                setTimeout(fetchFeed, 10000);
+                const cachedData = localStorage.getItem(CACHE_KEY);
+                if (cachedData && stories.length === 0) {
+                    initStories(JSON.parse(cachedData));
+                    setTimeout(fetchFeed, 30000);
+                } else {
+                    logStatus("Fehler beim Verarbeiten. Versuche erneut in 10s...");
+                    setTimeout(fetchFeed, 10000);
+                }
             }
         }
 
         function initStories(dataArray) {
+            // Animation stoppen, um Überschneidungen bei Hintergrund-Updates zu verhindern
+            cancelAnimationFrame(animationFrameId);
+
             stories = dataArray;
             document.getElementById('loader').style.display = 'none';
             document.getElementById('storyHeader').style.display = 'flex';
@@ -478,7 +493,11 @@
                 slidesContainer.appendChild(slide);
             });
 
+            // Immer bei der ersten Story beginnen
             showStory(0);
+
+            // Nach einem kompletten Durchlauf (15 Stories * 7s = ~105s) vollautomatisch im Hintergrund neu laden
+            setTimeout(fetchFeed, stories.length * STORY_DURATION);
         }
 
         function showStory(index) {
