@@ -86,6 +86,7 @@
             padding: 0 5%;
             z-index: 10;
             text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+            visibility: hidden; /* Wird sichtbar sobald Stories geladen sind */
         }
 
         .meta-info {
@@ -222,27 +223,6 @@
             padding-top: 2vh;
             opacity: 0.7;
         }
-
-        /* Loader-Screen */
-        .loader {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 2.5vh;
-            color: #fff;
-            z-index: 20;
-            text-align: center;
-            width: 80%;
-        }
-
-        #status-ticker {
-            margin-top: 15px;
-            font-size: 1.7vh;
-            color: var(--text-muted);
-            font-family: monospace;
-            display: block;
-        }
     </style>
 </head>
 <body>
@@ -250,13 +230,8 @@
     <div id="error-debug" style="position: absolute; top: 0; left: 0; right: 0; background: rgba(220, 20, 60, 0.95); color: white; padding: 15px; z-index: 99999; font-family: monospace; font-size: 14px; display: none; word-break: break-all; text-align: left;"></div>
 
     <div class="story-wrapper">
-        <div class="loader" id="loader">
-            NZZ Stories werden geladen...
-            <span id="status-ticker">Verbindung wird aufgebaut...</span>
-        </div>
-        
         <div class="progress-container" id="progressContainer"></div>
-        <div class="story-header" id="storyHeader" style="display: none;">
+        <div class="story-header" id="storyHeader">
             <div class="meta-info">
                 <span class="category" id="headerCategory">NZZ</span>
                 <span class="time-ago" id="headerTime">Jetzt</span>
@@ -292,25 +267,19 @@
         let animationFrameId = null;
 
         function logStatus(text) {
-            const ticker = document.getElementById('status-ticker');
-            if (ticker) ticker.innerText = text;
+            console.log("Playout Status: " + text);
         }
 
         // Intelligente Formatierung der Kategorien inkl. Umlaut-Korrektur
         function formatCategory(str) {
             if (!str) return 'NZZ';
-            
             let cat = str.toLowerCase().trim();
-            
-            // Generische Feed-Tags aussortieren
             if (cat === 'recent' || cat === 'news') return 'NZZ';
             
-            // Umlaute ersetzen (ae -> ä, oe -> ö, ue -> ü)
             cat = cat.replace(/ae/g, 'ä')
                      .replace(/oe/g, 'ö')
                      .replace(/ue/g, 'ü');
             
-            // Ersten Buchstaben wieder großschreiben (z.B. zürich -> Zürich)
             return cat.charAt(0).toUpperCase() + cat.slice(1);
         }
 
@@ -357,20 +326,8 @@
                 console.warn("Server 3 fehlgeschlagen.");
             }
 
-            // AUSFALLSICHERUNG: Wenn alle Proxies blockieren, prüfen wir den lokalen Cache
-            const cachedData = localStorage.getItem(CACHE_KEY);
-            if (cachedData) {
-                console.log("Server blockiert. Verwende lokalen Nachrichtencache.");
-                const parsedStories = JSON.parse(cachedData);
-                
-                if (stories.length === 0) {
-                    initStories(parsedStories);
-                }
-                setTimeout(fetchFeed, 30000);
-            } else {
-                logStatus("Verbindung temporär blockiert. Automatischer Reconnect in 10s...");
-                setTimeout(fetchFeed, 10000);
-            }
+            // Wenn alle Stricke im Hintergrund reißen, versuchen wir es schweigend in 30 Sekunden erneut
+            setTimeout(fetchFeed, 30000);
         }
 
         function parseAndInit(xmlString) {
@@ -385,7 +342,6 @@
                     const pubDate = item.querySelector('pubDate') ? item.querySelector('pubDate').textContent : '';
                     const link = item.querySelector('link') ? item.querySelector('link').textContent.trim() : '';
 
-                    // Kategorie-Extrahierung direkt aus dem NZZ-Link-Pfad
                     let category = '';
                     if (link && link.includes('nzz.ch')) {
                         try {
@@ -401,7 +357,6 @@
                         category = item.querySelector('category') ? item.querySelector('category').textContent : 'NZZ';
                     }
 
-                    // Hier greift die neue Umlaut-Korrektur und Formatierung
                     category = formatCategory(category);
 
                     let imageUrl = '';
@@ -449,22 +404,16 @@
                     };
                 });
 
-                if (parsedStories.length === 0) {
-                    throw new Error("Leerer Feed");
-                }
+                if (parsedStories.length === 0) throw new Error("Leerer Feed");
 
+                // Speicher im Browser aktualisieren
                 localStorage.setItem(CACHE_KEY, JSON.stringify(parsedStories));
+                
+                // Live-Wiedergabe mit neuen Daten aktualisieren
                 initStories(parsedStories);
             } catch (err) {
-                console.error(err);
-                const cachedData = localStorage.getItem(CACHE_KEY);
-                if (cachedData && stories.length === 0) {
-                    initStories(JSON.parse(cachedData));
-                    setTimeout(fetchFeed, 30000);
-                } else {
-                    logStatus("Fehler beim Verarbeiten. Versuche erneut in 10s...");
-                    setTimeout(fetchFeed, 10000);
-                }
+                console.error("Fehler beim Verarbeiten im Hintergrund:", err);
+                setTimeout(fetchFeed, 30000);
             }
         }
 
@@ -472,8 +421,7 @@
             cancelAnimationFrame(animationFrameId);
 
             stories = dataArray;
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('storyHeader').style.display = 'flex';
+            document.getElementById('storyHeader').style.visibility = 'visible';
 
             const progressContainer = document.getElementById('progressContainer');
             const slidesContainer = document.getElementById('slidesContainer');
@@ -505,6 +453,7 @@
 
             showStory(0);
 
+            // Nach einem kompletten Durchlauf vollautomatisch im Hintergrund neu laden
             setTimeout(fetchFeed, stories.length * STORY_DURATION);
         }
 
@@ -587,7 +536,26 @@
         document.getElementById('zoneLeft').addEventListener('click', prevStory);
         document.getElementById('zoneRight').addEventListener('click', nextStory);
 
-        fetchFeed();
+        // STARTUP LOGIK: Prüft sofort den Cache für ultraschnellen Start
+        function startApp() {
+            const cachedData = localStorage.getItem(CACHE_KEY);
+            if (cachedData) {
+                try {
+                    const parsedStories = JSON.parse(cachedData);
+                    if (parsedStories && parsedStories.length > 0) {
+                        logStatus("Starte sofort mit lokal gepufferten Stories.");
+                        initStories(parsedStories);
+                    }
+                } catch(e) {
+                    console.error("Cache korrupt, warte auf Live-Daten.");
+                }
+            }
+            
+            // Unabhängig vom Cache sofort parallel im Hintergrund die neuesten News holen
+            fetchFeed();
+        }
+
+        startApp();
     </script>
 </body>
 </html>
