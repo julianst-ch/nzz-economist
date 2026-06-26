@@ -296,6 +296,24 @@
             if (ticker) ticker.innerText = text;
         }
 
+        // Intelligente Formatierung der Kategorien inkl. Umlaut-Korrektur
+        function formatCategory(str) {
+            if (!str) return 'NZZ';
+            
+            let cat = str.toLowerCase().trim();
+            
+            // Generische Feed-Tags aussortieren
+            if (cat === 'recent' || cat === 'news') return 'NZZ';
+            
+            // Umlaute ersetzen (ae -> ä, oe -> ö, ue -> ü)
+            cat = cat.replace(/ae/g, 'ä')
+                     .replace(/oe/g, 'ö')
+                     .replace(/ue/g, 'ü');
+            
+            // Ersten Buchstaben wieder großschreiben (z.B. zürich -> Zürich)
+            return cat.charAt(0).toUpperCase() + cat.slice(1);
+        }
+
         async function fetchFeed() {
             // Server-Versuch 1: Allorigins
             try {
@@ -345,14 +363,11 @@
                 console.log("Server blockiert. Verwende lokalen Nachrichtencache.");
                 const parsedStories = JSON.parse(cachedData);
                 
-                // Falls das Display noch gar keine Stories geladen hatte, initialisieren wir jetzt die gecachten Daten
                 if (stories.length === 0) {
                     initStories(parsedStories);
                 }
-                // Im Hintergrund leise in 30 Sekunden erneut versuchen, ohne den Playout zu stören
                 setTimeout(fetchFeed, 30000);
             } else {
-                // Nur wenn absolut gar keine Daten da sind (beim allerersten App-Start), zeigen wir die Warteschleife
                 logStatus("Verbindung temporär blockiert. Automatischer Reconnect in 10s...");
                 setTimeout(fetchFeed, 10000);
             }
@@ -370,7 +385,7 @@
                     const pubDate = item.querySelector('pubDate') ? item.querySelector('pubDate').textContent : '';
                     const link = item.querySelector('link') ? item.querySelector('link').textContent.trim() : '';
 
-                    // Präzise Kategorie-Extrahierung direkt aus dem NZZ-Link-Pfad
+                    // Kategorie-Extrahierung direkt aus dem NZZ-Link-Pfad
                     let category = '';
                     if (link && link.includes('nzz.ch')) {
                         try {
@@ -378,7 +393,6 @@
                             const pathSegments = urlObj.pathname.split('/').filter(s => s);
                             if (pathSegments.length > 0 && !pathSegments[0].includes('ld.')) {
                                 category = pathSegments[0];
-                                category = category.charAt(0).toUpperCase() + category.slice(1);
                             }
                         } catch (e) {}
                     }
@@ -387,9 +401,8 @@
                         category = item.querySelector('category') ? item.querySelector('category').textContent : 'NZZ';
                     }
 
-                    if (category.toLowerCase() === 'recent' || category.toLowerCase() === 'news') {
-                        category = 'NZZ';
-                    }
+                    // Hier greift die neue Umlaut-Korrektur und Formatierung
+                    category = formatCategory(category);
 
                     let imageUrl = '';
                     let creator = '';
@@ -440,9 +453,7 @@
                     throw new Error("Leerer Feed");
                 }
 
-                // Erfolgreiche Daten im localStorage für Offline-Phasen ablegen
                 localStorage.setItem(CACHE_KEY, JSON.stringify(parsedStories));
-                
                 initStories(parsedStories);
             } catch (err) {
                 console.error(err);
@@ -458,7 +469,6 @@
         }
 
         function initStories(dataArray) {
-            // Animation stoppen, um Überschneidungen bei Hintergrund-Updates zu verhindern
             cancelAnimationFrame(animationFrameId);
 
             stories = dataArray;
@@ -493,10 +503,8 @@
                 slidesContainer.appendChild(slide);
             });
 
-            // Immer bei der ersten Story beginnen
             showStory(0);
 
-            // Nach einem kompletten Durchlauf (15 Stories * 7s = ~105s) vollautomatisch im Hintergrund neu laden
             setTimeout(fetchFeed, stories.length * STORY_DURATION);
         }
 
