@@ -155,7 +155,7 @@
             visibility: visible;
         }
 
-        /* Wieder zurück auf die bewährten 50% */
+        /* Bild fix bei 50% */
         .image-container {
             width: 100%;
             height: 50%; 
@@ -179,10 +179,10 @@
             background: linear-gradient(to bottom, transparent, var(--bg-color));
         }
 
-        /* Textbereich nutzt den Rest perfekt aus */
+        /* Textbereich */
         .content-container {
             flex: 1;
-            padding: 3vh 6% 5vh 6%; 
+            padding: 2.5vh 6% 4.5vh 6%; 
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
@@ -197,32 +197,41 @@
             font-weight: 800;
             letter-spacing: 1.5px;
             color: var(--accent-blue);
-            margin-bottom: 1.5vh;
+            margin-bottom: 1.2vh;
         }
 
-        /* Wieder die alte, gewollte GROSSE Ausgangslage */
+        /* Titel: Erlaubt bis zu 5 Zeilen, kein abschneidendes Clamping mehr */
         .story-title {
             font-family: Georgia, serif;
             font-size: 4.2vh; 
             line-height: 1.25;
             font-weight: 700;
-            margin-bottom: 2vh;
+            margin-bottom: 1.8vh;
             color: var(--text-color);
             letter-spacing: -0.3px;
+            display: -webkit-box;
+            -webkit-line-clamp: 5;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
+        /* Beschreibung: Stabil bei maximal 4 Zeilen */
         .story-description {
             font-size: 2.3vh; 
-            line-height: 1.55;
+            line-height: 1.50;
             color: var(--text-muted);
             font-weight: 400;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .story-author {
             font-size: 1.8vh;
             color: var(--text-muted);
             margin-top: auto;
-            padding-top: 2vh;
+            padding-top: 1.5vh;
             opacity: 0.7;
         }
     </style>
@@ -391,182 +400,4 @@
                 if (parsedStories.length === 0) throw new Error("Leerer Feed");
 
                 localStorage.setItem(CACHE_KEY, JSON.stringify(parsedStories));
-                initStories(parsedStories);
-            } catch (err) {
-                console.error(err);
-                setTimeout(fetchFeed, 30000);
-            }
-        }
-
-        function initStories(dataArray) {
-            cancelAnimationFrame(animationFrameId);
-
-            stories = dataArray;
-            document.getElementById('storyHeader').style.visibility = 'visible';
-
-            const progressContainer = document.getElementById('progressContainer');
-            const slidesContainer = document.getElementById('slidesContainer');
-
-            progressContainer.innerHTML = '';
-            slidesContainer.innerHTML = '';
-
-            stories.forEach((story, idx) => {
-                const bar = document.createElement('div');
-                bar.className = 'progress-bar';
-                bar.innerHTML = '<div class="progress-fill" id="fill-' + idx + '"></div>';
-                progressContainer.appendChild(bar);
-
-                const slide = document.createElement('div');
-                slide.className = 'slide ' + (idx === 0 ? 'active' : '');
-                slide.innerHTML = `
-                    <div class="image-container">
-                        <img class="story-img" src="${story.imageUrl}" alt="News">
-                    </div>
-                    <div class="content-container">
-                        ${story.title.toLowerCase().includes('live') || story.title.toLowerCase().includes('ticker') ? '<div class="ticker-badge">LIVE-TICKER</div>' : ''}
-                        <h1 class="story-title">${story.title}</h1>
-                        <p class="story-description">${story.description}</p>
-                        ${story.creator ? `<p class="story-author">${story.creator}</p>` : ''}
-                    </div>
-                `;
-                slidesContainer.appendChild(slide);
-            });
-
-            showStory(currentIndex < stories.length ? currentIndex : 0);
-            setTimeout(fetchFeed, stories.length * STORY_DURATION);
-        }
-
-        // INTELLIGENTE SCHRIFTANPASSUNG (Optimiert für Tizen 5 & 7)
-        function adjustFontSize(slide) {
-            const content = slide.querySelector('.content-container');
-            const titleEl = slide.querySelector('.story-title');
-            const descEl = slide.querySelector('.story-description');
-            if (!content || !titleEl) return;
-
-            // 1. IMMER mit der großen Originalgröße starten
-            titleEl.style.fontSize = '4.2vh';
-            if (descEl) {
-                descEl.style.display = 'block';
-                descEl.style.fontSize = '2.3vh';
-            }
-
-            // 2. Sofort-Check: Sprengt die Kombination das Display?
-            if (content.scrollHeight > content.clientHeight) {
-                // Wenn ja: Beschreibung SOFORT komplett ausblenden, um Platz zu sparen
-                if (descEl) {
-                    descEl.style.display = 'none';
-                }
-
-                // Falls der Titel ALLEINE (z.B. extrem langer Eilticker) immer noch zu groß ist,
-                // passen wir nur ihn sanft an – aber niemals unter ein hochlesbares Maß (3.4vh)
-                let titleSize = 4.2;
-                while (content.scrollHeight > content.clientHeight && titleSize > 3.4) {
-                    titleSize -= 0.1;
-                    titleEl.style.fontSize = titleSize + 'vh';
-                }
-            }
-        }
-
-        function showStory(index) {
-            if (index < 0 || index >= stories.length) return;
-            
-            cancelAnimationFrame(animationFrameId);
-
-            const slides = document.querySelectorAll('.slide');
-            slides.forEach((slide, idx) => {
-                slide.classList.toggle('active', idx === index);
-            });
-
-            currentIndex = index;
-            const story = stories[currentIndex];
-
-            const activeSlide = slides[currentIndex];
-            if (activeSlide) {
-                adjustFontSize(activeSlide);
-            }
-
-            document.getElementById('headerCategory').innerText = story.category;
-            document.getElementById('headerTime').innerText = formatRelativeTime(story.pubDate);
-            
-            const bars = document.querySelectorAll('.progress-bar');
-            bars.forEach((bar, idx) => {
-                const fill = bar.querySelector('.progress-fill');
-                if (idx < index) {
-                    fill.style.width = '100%';
-                } else if (idx > index) {
-                    fill.style.width = '0%';
-                }
-            });
-
-            startTime = performance.now();
-            animateProgress();
-        }
-
-        function animateProgress() {
-            const activeFill = document.getElementById('fill-' + currentIndex);
-            if (!activeFill) return;
-
-            const elapsed = performance.now() - startTime;
-            const progress = Math.min((elapsed / STORY_DURATION) * 100, 100);
-            activeFill.style.width = progress + '%';
-
-            if (progress < 100) {
-                animationFrameId = requestAnimationFrame(animateProgress);
-            } else {
-                nextStory();
-            }
-        }
-
-        function nextStory() {
-            if (currentIndex < stories.length - 1) {
-                showStory(currentIndex + 1);
-            } else {
-                showStory(0);
-            }
-        }
-
-        function prevStory() {
-            if (currentIndex > 0) {
-                showStory(currentIndex - 1);
-            } else {
-                showStory(0);
-            }
-        }
-
-        function formatRelativeTime(dateStr) {
-            try {
-                const parsedDate = new Date(dateStr);
-                const diffMs = new Date() - parsedDate;
-                const diffMins = Math.floor(diffMs / 60000);
-                const diffHours = Math.floor(diffMins / 60);
-
-                if (diffMins < 60) return Math.max(1, diffMins) + 'm';
-                if (diffHours < 24) return diffHours + 'h';
-                return parsedDate.toLocaleDateString('de-CH', { day: 'numeric', month: 'short' });
-            } catch (e) {
-                return 'Jetzt';
-            }
-        }
-
-        document.getElementById('zoneLeft').addEventListener('click', prevStory);
-        document.getElementById('zoneRight').addEventListener('click', nextStory);
-
-        function startApp() {
-            const cachedData = localStorage.getItem(CACHE_KEY);
-            if (cachedData) {
-                try {
-                    const parsedStories = JSON.parse(cachedData);
-                    if (parsedStories && parsedStories.length > 0) {
-                        initStories(parsedStories);
-                    }
-                } catch(e) {
-                    console.error("Cache Fehler.");
-                }
-            }
-            fetchFeed();
-        }
-
-        startApp();
-    </script>
-</body>
-</html>
+                init
