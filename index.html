@@ -155,7 +155,7 @@
             visibility: visible;
         }
 
-        /* Bild wieder auf stolze 50% für optimale Ästhetik */
+        /* Wieder zurück auf die bewährten 50% */
         .image-container {
             width: 100%;
             height: 50%; 
@@ -179,7 +179,7 @@
             background: linear-gradient(to bottom, transparent, var(--bg-color));
         }
 
-        /* Textbereich füllt den Rest, schneidet nichts unkontrolliert ab */
+        /* Textbereich nutzt den Rest perfekt aus */
         .content-container {
             flex: 1;
             padding: 3vh 6% 5vh 6%; 
@@ -187,7 +187,7 @@
             flex-direction: column;
             justify-content: flex-start;
             background-color: var(--bg-color);
-            overflow: hidden; /* Wichtig für die Höhenberechnung im Skript */
+            overflow: hidden;
         }
 
         .ticker-badge {
@@ -200,7 +200,7 @@
             margin-bottom: 1.5vh;
         }
 
-        /* Standardmäßig wieder schön GROSS */
+        /* Wieder die alte, gewollte GROSSE Ausgangslage */
         .story-title {
             font-family: Georgia, serif;
             font-size: 4.2vh; 
@@ -267,10 +267,6 @@
         let currentIndex = 0;
         let startTime = null;
         let animationFrameId = null;
-
-        function logStatus(text) {
-            console.log("Playout Status: " + text);
-        }
 
         function formatCategory(str) {
             if (!str) return 'NZZ';
@@ -440,43 +436,33 @@
             setTimeout(fetchFeed, stories.length * STORY_DURATION);
         }
 
-        // INTELLIGENTE, DYNAMISCHE SCHRIFTANPASSUNG (Auto-Fit)
+        // INTELLIGENTE SCHRIFTANPASSUNG (Optimiert für Tizen 5 & 7)
         function adjustFontSize(slide) {
             const content = slide.querySelector('.content-container');
             const titleEl = slide.querySelector('.story-title');
             const descEl = slide.querySelector('.story-description');
             if (!content || !titleEl) return;
 
-            // 1. Reset auf maximale Standard-Größen
-            if (descEl) descEl.style.display = 'block';
-            let titleSize = 4.2; // in vh
-            let descSize = 2.3;  // in vh
-            
-            titleEl.style.fontSize = titleSize + 'vh';
-            if (descEl) descEl.style.fontSize = descSize + 'vh';
+            // 1. IMMER mit der großen Originalgröße starten
+            titleEl.style.fontSize = '4.2vh';
+            if (descEl) {
+                descEl.style.display = 'block';
+                descEl.style.fontSize = '2.3vh';
+            }
 
-            let safetyCounter = 0;
-
-            // 2. Verkleinerungsschleife falls der Text den Container sprengt (Tizen 5 & 7 kompatibel)
-            while (content.scrollHeight > content.clientHeight && safetyCounter < 30) {
-                safetyCounter++;
-
-                // FALLBACK: Wenn der Titel unter 3.0vh sinken würde, blenden wir den Untertitel
-                // komplett aus, setzen den Titel zurück auf groß und berechnen neu.
-                if (titleSize <= 3.0 && descEl && descEl.style.display !== 'none') {
+            // 2. Sofort-Check: Sprengt die Kombination das Display?
+            if (content.scrollHeight > content.clientHeight) {
+                // Wenn ja: Beschreibung SOFORT komplett ausblenden, um Platz zu sparen
+                if (descEl) {
                     descEl.style.display = 'none';
-                    titleSize = 4.2;
-                    titleEl.style.fontSize = titleSize + 'vh';
-                    continue;
                 }
 
-                // Schrittweise verkleinern
-                titleSize -= 0.15;
-                titleEl.style.fontSize = titleSize + 'vh';
-
-                if (descEl && descEl.style.display !== 'none') {
-                    descSize -= 0.1;
-                    descEl.style.fontSize = descSize + 'vh';
+                // Falls der Titel ALLEINE (z.B. extrem langer Eilticker) immer noch zu groß ist,
+                // passen wir nur ihn sanft an – aber niemals unter ein hochlesbares Maß (3.4vh)
+                let titleSize = 4.2;
+                while (content.scrollHeight > content.clientHeight && titleSize > 3.4) {
+                    titleSize -= 0.1;
+                    titleEl.style.fontSize = titleSize + 'vh';
                 }
             }
         }
@@ -494,7 +480,6 @@
             currentIndex = index;
             const story = stories[currentIndex];
 
-            // Wichtig: Textanpassung direkt triggern, sobald der Slide aktiv geschaltet wird
             const activeSlide = slides[currentIndex];
             if (activeSlide) {
                 adjustFontSize(activeSlide);
@@ -575,7 +560,7 @@
                         initStories(parsedStories);
                     }
                 } catch(e) {
-                    console.error("Cache korrupt.");
+                    console.error("Cache Fehler.");
                 }
             }
             fetchFeed();
