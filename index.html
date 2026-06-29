@@ -6,7 +6,7 @@
     <title>NZZ News Stories - Universal Playout</title>
     <style>
         :root {
-            --bg-color: #050b14; /* Originaler, tiefer NZZ-Blauton */
+            --bg-color: #050b14; 
             --text-color: #ffffff;
             --text-muted: #a2aebf;
             --accent-blue: #2e96ff;
@@ -32,7 +32,7 @@
             overflow: hidden;
         }
 
-        /* Perfekte 9:16 Box für ALLE Geräte */
+        /* Perfekte 9:16 Box */
         .story-wrapper {
             position: relative;
             width: 100vw;
@@ -47,7 +47,7 @@
             box-shadow: 0 0 40px rgba(0,0,0,0.85);
         }
 
-        /* Fortschrittsbalken oben */
+        /* Progress Bar */
         .progress-container {
             position: absolute;
             top: 2.5vh;
@@ -74,7 +74,7 @@
             background-color: #fff;
         }
 
-        /* Header (Kategorie & Zeit) */
+        /* Header */
         .story-header {
             position: absolute;
             top: 4.5vh;
@@ -97,27 +97,11 @@
             letter-spacing: 0.3px;
         }
 
-        .category {
-            color: #fff;
-        }
+        .category { color: #fff; }
+        .time-ago { color: var(--text-muted); margin-left: 8px; font-weight: 400; }
+        .close-btn { background: none; border: none; color: #fff; font-size: 3.5vh; cursor: pointer; opacity: 0.6; line-height: 1; }
 
-        .time-ago {
-            color: var(--text-muted);
-            margin-left: 8px;
-            font-weight: 400;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            color: #fff;
-            font-size: 3.5vh;
-            cursor: pointer;
-            opacity: 0.6;
-            line-height: 1;
-        }
-
-        /* Touch-/Klick-Zonen für manuelle Navigation */
+        /* Navigation */
         .nav-zones {
             position: absolute;
             top: 0;
@@ -127,15 +111,10 @@
             z-index: 5;
             display: flex;
         }
-
         .zone-left { width: 33%; height: 100%; }
         .zone-right { width: 67%; height: 100%; }
 
-        .slides-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-        }
+        .slides-container { width: 100%; height: 100%; position: relative; }
 
         .slide {
             position: absolute;
@@ -150,10 +129,7 @@
             flex-direction: column;
         }
 
-        .slide.active {
-            opacity: 1;
-            visibility: visible;
-        }
+        .slide.active { opacity: 1; visibility: visible; }
 
         /* Bild fix bei 50% */
         .image-container {
@@ -163,11 +139,7 @@
             background-color: #000;
         }
 
-        .story-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+        .story-img { width: 100%; height: 100%; object-fit: cover; }
 
         .image-container::after {
             content: '';
@@ -200,22 +172,19 @@
             margin-bottom: 1.2vh;
         }
 
-        /* Titel: Erlaubt bis zu 5 Zeilen, kein abschneidendes Clamping mehr */
+        /* Titel: Festes Line-Height für präzise JS-Berechnung */
         .story-title {
             font-family: Georgia, serif;
             font-size: 4.2vh; 
-            line-height: 1.25;
+            line-height: 1.25; /* WICHTIG: Entspricht dem Faktor 1.25 im JS */
             font-weight: 700;
             margin-bottom: 1.8vh;
             color: var(--text-color);
             letter-spacing: -0.3px;
-            display: -webkit-box;
-            -webkit-line-clamp: 5;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            word-break: break-word; /* Verhindert das Herausragen extrem langer Wörter */
         }
 
-        /* Beschreibung: Stabil bei maximal 4 Zeilen */
+        /* Beschreibung: Strikt limitiert auf maximal 4 Zeilen */
         .story-description {
             font-size: 2.3vh; 
             line-height: 1.50;
@@ -400,4 +369,186 @@
                 if (parsedStories.length === 0) throw new Error("Leerer Feed");
 
                 localStorage.setItem(CACHE_KEY, JSON.stringify(parsedStories));
-                init
+                initStories(parsedStories);
+            } catch (err) {
+                console.error(err);
+                setTimeout(fetchFeed, 30000);
+            }
+        }
+
+        function initStories(dataArray) {
+            cancelAnimationFrame(animationFrameId);
+
+            stories = dataArray;
+            document.getElementById('storyHeader').style.visibility = 'visible';
+
+            const progressContainer = document.getElementById('progressContainer');
+            const slidesContainer = document.getElementById('slidesContainer');
+
+            progressContainer.innerHTML = '';
+            slidesContainer.innerHTML = '';
+
+            stories.forEach((story, idx) => {
+                const bar = document.createElement('div');
+                bar.className = 'progress-bar';
+                bar.innerHTML = '<div class="progress-fill" id="fill-' + idx + '"></div>';
+                progressContainer.appendChild(bar);
+
+                const slide = document.createElement('div');
+                slide.className = 'slide ' + (idx === 0 ? 'active' : '');
+                slide.innerHTML = `
+                    <div class="image-container">
+                        <img class="story-img" src="${story.imageUrl}" alt="News">
+                    </div>
+                    <div class="content-container">
+                        ${story.title.toLowerCase().includes('live') || story.title.toLowerCase().includes('ticker') ? '<div class="ticker-badge">LIVE-TICKER</div>' : ''}
+                        <h1 class="story-title">${story.title}</h1>
+                        <p class="story-description">${story.description}</p>
+                        ${story.creator ? `<p class="story-author">${story.creator}</p>` : ''}
+                    </div>
+                `;
+                slidesContainer.appendChild(slide);
+            });
+
+            showStory(currentIndex < stories.length ? currentIndex : 0);
+            setTimeout(fetchFeed, stories.length * STORY_DURATION);
+        }
+
+        // SCHUSSFESTE ZEILENBERECHNUNG FÜR DEN TITEL (Maximal 5 Zeilen)
+        function adjustFontSize(slide) {
+            const titleEl = slide.querySelector('.story-title');
+            if (!titleEl) return;
+
+            // 1. Reset auf deine gewollte, markante Ausgangsgrösse
+            let titleSize = 4.2; 
+            titleEl.style.fontSize = titleSize + 'vh';
+
+            let safetyCounter = 0;
+
+            // 2. Loop prüft exklusiv die Zeilenanzahl des Titels
+            while (safetyCounter < 40) {
+                const computedStyle = window.getComputedStyle(titleEl);
+                const fontSizePx = parseFloat(computedStyle.fontSize);
+                
+                // Da CSS line-height auf 1.25 gesetzt ist, wissen wir mathematisch exakt,
+                // wie hoch eine einzelne Zeile in Pixeln sein MUSS.
+                const lineExpectedHeight = fontSizePx * 1.25; 
+                const currentTitleHeight = titleEl.offsetHeight;
+                
+                // Berechne die reellen Zeilen des Titels (+1px Toleranz für Subpixel-Rendering)
+                const currentLines = Math.ceil((currentTitleHeight - 1) / lineExpectedHeight);
+
+                // Wenn der Titel mehr als 5 Zeilen benötigt, verkleinern wir die Schrift
+                if (currentLines > 5 && titleSize > 1.8) {
+                    titleSize -= 0.1;
+                    titleEl.style.fontSize = titleSize + 'vh';
+                    safetyCounter++;
+                } else {
+                    break; // Perfekt, der Titel hat maximal 5 Zeilen!
+                }
+            }
+        }
+
+        function showStory(index) {
+            if (index < 0 || index >= stories.length) return;
+            
+            cancelAnimationFrame(animationFrameId);
+
+            const slides = document.querySelectorAll('.slide');
+            slides.forEach((slide, idx) => {
+                slide.classList.toggle('active', idx === index);
+            });
+
+            currentIndex = index;
+            const story = stories[currentIndex];
+
+            const activeSlide = slides[currentIndex];
+            if (activeSlide) {
+                adjustFontSize(activeSlide);
+            }
+
+            document.getElementById('headerCategory').innerText = story.category;
+            document.getElementById('headerTime').innerText = formatRelativeTime(story.pubDate);
+            
+            const bars = document.querySelectorAll('.progress-bar');
+            bars.forEach((bar, idx) => {
+                const fill = bar.querySelector('.progress-fill');
+                if (idx < index) {
+                    fill.style.width = '100%';
+                } else if (idx > index) {
+                    fill.style.width = '0%';
+                }
+            });
+
+            startTime = performance.now();
+            animateProgress();
+        }
+
+        function animateProgress() {
+            const activeFill = document.getElementById('fill-' + currentIndex);
+            if (!activeFill) return;
+
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min((elapsed / STORY_DURATION) * 100, 100);
+            activeFill.style.width = progress + '%';
+
+            if (progress < 100) {
+                animationFrameId = requestAnimationFrame(animateProgress);
+            } else {
+                nextStory();
+            }
+        }
+
+        function nextStory() {
+            if (currentIndex < stories.length - 1) {
+                showStory(currentIndex + 1);
+            } else {
+                showStory(0);
+            }
+        }
+
+        function prevStory() {
+            if (currentIndex > 0) {
+                showStory(currentIndex - 1);
+            } else {
+                showStory(0);
+            }
+        }
+
+        function formatRelativeTime(dateStr) {
+            try {
+                const parsedDate = new Date(dateStr);
+                const diffMs = new Date() - parsedDate;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMins / 60);
+
+                if (diffMins < 60) return Math.max(1, diffMins) + 'm';
+                if (diffHours < 24) return diffHours + 'h';
+                return parsedDate.toLocaleDateString('de-CH', { day: 'numeric', month: 'short' });
+            } catch (e) {
+                return 'Jetzt';
+            }
+        }
+
+        document.getElementById('zoneLeft').addEventListener('click', prevStory);
+        document.getElementById('zoneRight').addEventListener('click', nextStory);
+
+        function startApp() {
+            const cachedData = localStorage.getItem(CACHE_KEY);
+            if (cachedData) {
+                try {
+                    const parsedStories = JSON.parse(cachedData);
+                    if (parsedStories && parsedStories.length > 0) {
+                        initStories(parsedStories);
+                    }
+                } catch(e) {
+                    console.error("Cache Fehler.");
+                }
+            }
+            fetchFeed();
+        }
+
+        startApp();
+    </script>
+</body>
+</html>
